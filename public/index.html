@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HomieAuto Pro | Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; font-family: 'Inter', sans-serif; overflow-x: hidden; }
+        .glass-card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .hidden { display: none !important; }
+        .hero-glow { position: absolute; top: -50px; left: 50%; transform: translateX(-50%); width: 300px; height: 300px; background: #10b981; filter: blur(150px); opacity: 0.2; z-index: -1; pointer-events: none;}
+        
+        .tab-btn.active { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border-bottom: 2px solid #3b82f6; }
+        .tab-btn { border-bottom: 2px solid transparent; }
+        
+        /* Details/Summary cleanup */
+        summary::-webkit-details-marker { display: none; }
+    </style>
+</head>
+<body class="antialiased pb-10 relative min-h-screen">
+
+    <div class="hero-glow"></div>
+
+    <div id="auth-container" class="flex items-center justify-center min-h-screen px-4">
+        <div class="glass-card p-8 rounded-3xl w-full max-w-md shadow-2xl relative overflow-hidden">
+            <h1 class="text-3xl font-bold text-center text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-500 mb-2">HomieAuto</h1>
+            <p id="error-msg" class="text-red-400 text-sm text-center mb-4 h-5"></p>
+
+            <div id="login-form">
+                <h2 class="text-xl font-semibold mb-6 text-center">Welcome Back</h2>
+                <input type="email" id="login-email" placeholder="Email Address" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 mb-4 text-white focus:outline-none focus:border-green-500">
+                <input type="password" id="login-password" placeholder="Password" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 mb-6 text-white focus:outline-none focus:border-green-500">
+                <button onclick="handleLogin()" class="w-full bg-green-500 hover:bg-green-400 text-slate-900 font-bold py-3 rounded-xl transition-all mb-4">Log In</button>
+                <p class="text-center text-sm text-slate-400">Don't have an account? <span onclick="toggleAuth('signup')" class="text-green-400 cursor-pointer hover:underline">Sign up</span></p>
+            </div>
+
+            <div id="signup-form" class="hidden">
+                <h2 class="text-xl font-semibold mb-6 text-center">Create Account</h2>
+                <input type="email" id="signup-email" placeholder="Email Address" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 mb-4 text-white focus:outline-none focus:border-green-500">
+                <input type="password" id="signup-password" placeholder="Create Password" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 mb-4 text-white focus:outline-none focus:border-green-500">
+                <input type="password" id="signup-confirm" placeholder="Confirm Password" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 mb-6 text-white focus:outline-none focus:border-green-500">
+                <button onclick="handleSignup()" class="w-full bg-blue-500 hover:bg-blue-400 text-white font-bold py-3 rounded-xl transition-all mb-4">Register Device</button>
+                <p class="text-center text-sm text-slate-400">Already have an account? <span onclick="toggleAuth('login')" class="text-blue-400 cursor-pointer hover:underline">Log in</span></p>
+            </div>
+        </div>
+    </div>
+
+    <div id="main-app" class="hidden">
+        
+        <header class="glass-card sticky top-0 z-50 border-b border-slate-700/50 mb-8 backdrop-blur-xl">
+            <div class="max-w-6xl mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <div>
+                        <h1 class="text-2xl font-bold flex items-center">
+                            <span class="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-500">HomieAuto Pro</span>
+                            <i id="connection-status" class="fa-solid fa-circle text-xs text-red-500 ml-2 animate-pulse" title="Cloud Connection Status"></i>
+                        </h1>
+                        <p class="text-slate-400 text-xs" id="user-display">Loading...</p>
+                    </div>
+                </div>
+                
+                <nav class="flex flex-wrap gap-2 justify-center w-full md:w-auto">
+                    <button onclick="switchTab('tab-home')" id="nav-home" class="tab-btn active px-4 py-2 rounded-t-lg font-semibold text-sm transition-colors hover:text-white text-slate-300"><i class="fa-solid fa-house mr-2"></i> Home Control</button>
+                    <button onclick="switchTab('tab-automations')" id="nav-automations" class="tab-btn px-4 py-2 rounded-t-lg font-semibold text-sm transition-colors hover:text-white text-slate-300"><i class="fa-solid fa-clock mr-2"></i> Automations</button>
+                    <button onclick="switchTab('tab-dashboard')" id="nav-dashboard" class="tab-btn px-4 py-2 rounded-t-lg font-semibold text-sm transition-colors hover:text-white text-slate-300"><i class="fa-solid fa-chart-line mr-2"></i> Dashboard Matrix</button>
+                </nav>
+
+                <div class="flex items-center gap-3">
+                    <button id="global-save-btn" onclick="saveAllSettings()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-lg">
+                        <i class="fa-solid fa-cloud-arrow-up mr-2"></i> Save All Settings
+                    </button>
+                    <button onclick="logout()" class="bg-slate-800 hover:bg-red-500/20 hover:text-red-400 text-slate-400 px-4 py-2 rounded-lg transition-colors border border-transparent hover:border-red-500/50">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="max-w-6xl mx-auto px-6">
+            
+            <section id="tab-home" class="tab-content">
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                    <div class="bg-slate-800/50 p-5 rounded-2xl border border-slate-700/50 flex items-center gap-4">
+                        <div class="bg-blue-500/20 p-3 rounded-xl"><i class="fa-solid fa-bolt text-blue-400 text-xl"></i></div>
+                        <div><p class="text-xs text-slate-400 uppercase font-bold tracking-wider">Total Connected Load</p><h3 class="text-2xl font-bold" id="quick-total-watts">0 W</h3></div>
+                    </div>
+                    <div class="bg-slate-800/50 p-5 rounded-2xl border border-slate-700/50 flex items-center gap-4">
+                        <div class="bg-green-500/20 p-3 rounded-xl"><i class="fa-solid fa-leaf text-green-400 text-xl"></i></div>
+                        <div><p class="text-xs text-slate-400 uppercase font-bold tracking-wider">Active Draw Right Now</p><h3 class="text-2xl font-bold text-green-400" id="quick-active-watts">0 W</h3></div>
+                    </div>
+                    <div class="bg-slate-800/50 p-5 rounded-2xl border border-slate-700/50 flex items-center gap-4">
+                        <div class="bg-purple-500/20 p-3 rounded-xl"><i class="fa-solid fa-clock text-purple-400 text-xl"></i></div>
+                        <div><p class="text-xs text-slate-400 uppercase font-bold tracking-wider">Total Uptime Today</p><h3 class="text-2xl font-bold text-purple-400" id="quick-total-uptime">0 hrs</h3></div>
+                    </div>
+                </div>
+
+                <h2 class="text-xl font-bold mb-4 text-white">Live Controls</h2>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-10" id="device-grid"></div>
+
+                <details class="group glass-card p-6 rounded-2xl mb-10 border border-slate-700/50 cursor-pointer transition-all">
+                    <summary class="text-lg font-bold flex items-center justify-between list-none outline-none">
+                        <span class="flex items-center gap-2"><i class="fa-solid fa-microchip text-slate-400"></i> Hardware Profiles Configuration</span>
+                        <i class="fa-solid fa-chevron-down text-slate-400 transition-transform duration-300 group-open:rotate-180"></i>
+                    </summary>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6 cursor-default pt-4 border-t border-slate-700/50" id="hardware-profiles">
+                        </div>
+                </details>
+
+                <div class="p-6 bg-slate-800/50 rounded-2xl border border-slate-700/50 flex items-center justify-between mb-8">
+                    <div>
+                        <h3 class="font-bold mb-1"><i class="fa-solid fa-key text-yellow-400 mr-2"></i> ESP32 Provisioning Key</h3>
+                        <p class="text-xs text-slate-400">Paste this into the hardware setup portal during initial Wi-Fi setup.</p>
+                    </div>
+                    <code class="bg-slate-900 border border-slate-700 p-2 rounded-lg text-green-400 font-mono text-sm tracking-wide select-all" id="uid-key">...</code>
+                </div>
+            </section>
+
+            <section id="tab-automations" class="tab-content hidden">
+                <div class="mb-8">
+                    <h2 class="text-2xl font-bold text-white mb-2">Scheduling Engine</h2>
+                    <p class="text-slate-400 text-sm">Automate your home based on Indian Standard Time (IST). These schedules run directly on the ESP32 hardware, meaning they will execute even if your internet goes offline.</p>
+                </div>
+
+                <div class="glass-card p-6 rounded-2xl border border-slate-700/50 mb-8">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="schedules-container"></div>
+                </div>
+            </section>
+
+            <section id="tab-dashboard" class="tab-content hidden">
+                <div class="mb-8 flex justify-between items-end">
+                    <div>
+                        <h2 class="text-2xl font-bold text-white mb-2">Power Matrix Analytics</h2>
+                        <p class="text-slate-400 text-sm">Real-time breakdown of your home's energy consumption and uptime metrics.</p>
+                    </div>
+                    <button onclick="renderCharts()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 py-2 px-4 rounded-lg text-sm transition-colors"><i class="fa-solid fa-rotate-right mr-2"></i> Refresh</button>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                    <div class="glass-card p-6 rounded-2xl border border-slate-700/50">
+                        <h3 class="font-bold text-slate-300 mb-4 uppercase text-xs tracking-wider">Active Power Matrix (Watts)</h3>
+                        <div class="relative h-64 w-full">
+                            <canvas id="powerChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="glass-card p-6 rounded-2xl border border-slate-700/50">
+                        <h3 class="font-bold text-slate-300 mb-4 uppercase text-xs tracking-wider">Daily Uptime Matrix (Hours)</h3>
+                        <div class="relative h-64 w-full">
+                            <canvas id="uptimeChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script>
+        // --- 1. FIREBASE INITIALIZATION ---
+        // ⚠️ ENSURE YOUR FIREBASE CONFIG IS CORRECT HERE ⚠️
+        const firebaseConfig = {
+            apiKey: "AIzaSyBTaAZ7rvgqIGMgNHxgFNoWJn2Dhpdl2yI",
+            authDomain: "homiauto-default.firebaseapp.com",
+            databaseURL: "https://homiauto-default-rtdb.firebaseio.com",
+            projectId: "homiauto-default"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.database();
+
+        // --- 2. GLOBAL STATE ---
+        let currentUser = null;
+        let globalData = { devices: {}, names: {}, watts: {}, uptime: {}, schedules: {} };
+        let powerChartInstance = null;
+        let uptimeChartInstance = null;
+
+        const devices = [
+            { id: "light1", name: "Light 1", icon: "fa-lightbulb" },
+            { id: "light2", name: "Light 2", icon: "fa-lightbulb" },
+            { id: "fan1", name: "Fan 1", icon: "fa-fan" },
+            { id: "fan2", name: "Fan 2", icon: "fa-bolt" }
+        ];
+
+        // --- 3. UI HELPER FUNCTIONS ---
+        function showError(msg) {
+            document.getElementById('error-msg').innerText = msg;
+            setTimeout(() => { document.getElementById('error-msg').innerText = ""; }, 5000);
+        }
+
+        function toggleAuth(mode) {
+            document.getElementById('error-msg').innerText = "";
+            document.getElementById('login-form').classList.toggle('hidden', mode === 'signup');
+            document.getElementById('signup-form').classList.toggle('hidden', mode === 'login');
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(tabId).classList.remove('hidden');
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById('nav-' + tabId.replace('tab-', '')).classList.add('active');
+            if(tabId === 'tab-dashboard') renderCharts();
+        }
+
+        // --- 4. AUTHENTICATION ---
+        function handleSignup() {
+            const e = document.getElementById('signup-email').value;
+            const p = document.getElementById('signup-password').value;
+            const c = document.getElementById('signup-confirm').value;
+
+            if(!e || !p) return showError("Please fill in all fields.");
+            if(p !== c) return showError("Passwords do not match!");
+
+            auth.createUserWithEmailAndPassword(e, p).then(cred => {
+                const uid = cred.user.uid;
+                db.ref('Users/' + uid + '/devices').set({ light1: 0, light2: 0, fan1: 0, fan2: 0 });
+                db.ref('Users/' + uid + '/names').set({ light1: "Light 1", light2: "Light 2", fan1: "Fan 1", fan2: "Fan 2" });
+                db.ref('Users/' + uid + '/watts').set({ light1: 15, light2: 15, fan1: 60, fan2: 10 });
+                db.ref('Users/' + uid + '/uptime').set({ light1: 0, light2: 0, fan1: 0, fan2: 0 });
+            }).catch(err => showError(err.message));
+        }
+
+        function handleLogin() {
+            const e = document.getElementById('login-email').value;
+            const p = document.getElementById('login-password').value;
+            if(!e || !p) return showError("Please enter your email and password.");
+            auth.signInWithEmailAndPassword(e, p).catch(err => showError(err.message));
+        }
+
+        function logout() { auth.signOut(); }
+
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                currentUser = user;
+                document.getElementById('auth-container').classList.add('hidden');
+                document.getElementById('main-app').classList.remove('hidden');
+                document.getElementById('user-display').innerText = user.email;
+                document.getElementById('uid-key').innerText = user.uid;
+                buildUI(user.uid);
+                
+                // Live Connection Indicator Logic
+                db.ref('.info/connected').on('value', function(snap) {
+                    const indicator = document.getElementById('connection-status');
+                    if (snap.val() === true) {
+                        indicator.className = "fa-solid fa-circle text-xs text-green-500 ml-2";
+                        indicator.title = "Connected to Cloud";
+                    } else {
+                        indicator.className = "fa-solid fa-circle text-xs text-red-500 ml-2 animate-pulse";
+                        indicator.title = "Offline / Reconnecting...";
+                    }
+                });
+
+            } else {
+                document.getElementById('auth-container').classList.remove('hidden');
+                document.getElementById('main-app').classList.add('hidden');
+            }
+        });
+
+        // --- 5. CORE UI BUILDER & CLOUD SYNC ---
+        function buildUI(uid) {
+            const grid = document.getElementById('device-grid');
+            const profilesContainer = document.getElementById('hardware-profiles');
+            const schedulesContainer = document.getElementById('schedules-container');
+            
+            grid.innerHTML = ''; profilesContainer.innerHTML = ''; schedulesContainer.innerHTML = '';
+            
+            devices.forEach(dev => {
+                // Live Device Cards
+                grid.innerHTML += `
+                    <div class="glass-card p-6 rounded-2xl flex flex-col items-center justify-between h-40 border-2 border-transparent transition-all duration-300 relative overflow-hidden" id="card-${dev.id}">
+                        <div class="absolute top-2 right-3 text-xs text-slate-500 font-mono" id="display-watt-${dev.id}">0W</div>
+                        <i class="fa-solid ${dev.icon} text-3xl text-slate-500 transition-colors" id="icon-${dev.id}"></i>
+                        <span class="text-sm font-semibold mt-2 text-center" id="title-${dev.id}">${dev.name}</span>
+                        <div class="relative inline-block w-12 align-middle select-none transition duration-200 ease-in mt-3">
+                            <input type="checkbox" id="toggle-${dev.id}" class="absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer transition-transform duration-300 ease-in-out border-slate-300 z-10" style="top:0;" onchange="toggle('${dev.id}', this.checked)"/>
+                            <label for="toggle-${dev.id}" class="block overflow-hidden h-6 rounded-full bg-slate-600 cursor-pointer transition-colors duration-300 ease-in-out"></label>
+                        </div>
+                    </div>`;
+
+                // Collapsible Hardware Profiles (Inputs)
+                profilesContainer.innerHTML += `
+                    <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-800" onclick="event.stopPropagation()">
+                        <h4 class="font-bold text-slate-300 text-sm mb-3" id="profile-title-${dev.id}">${dev.name}</h4>
+                        <div class="space-y-2">
+                            <label class="text-xs text-slate-500 block">Device Name</label>
+                            <input type="text" id="rename-input-${dev.id}" class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-white focus:border-blue-500 outline-none transition-colors">
+                            <label class="text-xs text-slate-500 block mt-2">Power Rating (Watts)</label>
+                            <div class="relative">
+                                <input type="number" id="watt-input-${dev.id}" class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-white focus:border-blue-500 outline-none transition-colors">
+                                <span class="absolute right-3 top-2 text-slate-500 text-xs">W</span>
+                            </div>
+                        </div>
+                    </div>`;
+
+                // Scheduling UI
+                schedulesContainer.innerHTML += `
+                    <div class="bg-slate-800/40 p-5 rounded-xl border border-slate-700 hover:border-slate-500 transition-colors flex flex-col justify-between">
+                        <div class="flex justify-between items-center mb-4">
+                            <div class="flex items-center gap-3">
+                                <div class="bg-slate-700 p-2 rounded-lg"><i class="fa-solid ${dev.icon} text-slate-300"></i></div>
+                                <h4 class="font-bold text-white text-lg" id="sched-title-${dev.id}">${dev.name}</h4>
+                            </div>
+                            <div class="flex items-center gap-2 bg-slate-900 px-3 py-1 rounded-full border border-slate-700">
+                                <label class="text-xs font-bold text-slate-400 uppercase tracking-wider cursor-pointer" for="sched-active-${dev.id}">Enable</label>
+                                <input type="checkbox" id="sched-active-${dev.id}" class="w-4 h-4 accent-blue-500 cursor-pointer">
+                            </div>
+                        </div>
+                        
+                        <div class="flex gap-4 items-end bg-slate-900/50 p-4 rounded-lg">
+                            <div class="flex-1">
+                                <label class="text-xs text-slate-500 block mb-1">Trigger Time (IST)</label>
+                                <input type="time" id="sched-time-${dev.id}" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:border-blue-500 outline-none transition-colors">
+                            </div>
+                            <div class="w-32">
+                                <label class="text-xs text-slate-500 block mb-1">Action</label>
+                                <select id="sched-action-${dev.id}" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:border-blue-500 outline-none cursor-pointer transition-colors">
+                                    <option value="1">Turn ON</option>
+                                    <option value="0">Turn OFF</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>`;
+            });
+
+            // Master Firebase Listener
+            db.ref('Users/' + uid).on('value', snap => {
+                const data = snap.val();
+                if(!data) return;
+                
+                globalData = {
+                    devices: data.devices || {},
+                    names: data.names || {},
+                    watts: data.watts || {},
+                    uptime: data.uptime || {},
+                    schedules: data.schedules || {}
+                };
+
+                let totalWatts = 0; let activeWatts = 0; let totalSeconds = 0;
+
+                devices.forEach(dev => {
+                    const id = dev.id;
+                    const isOn = globalData.devices[id] === 1;
+                    const currentName = globalData.names[id] || dev.name;
+                    const currentWatt = Number(globalData.watts[id]) || 0;
+                    const sched = globalData.schedules[id] || {};
+
+                    // Calculate Top Metrics
+                    totalWatts += currentWatt;
+                    if (isOn) activeWatts += currentWatt;
+                    totalSeconds += Number(globalData.uptime[id]) || 0;
+
+                    // Update Live Grid Cards
+                    const toggleBtn = document.getElementById(`toggle-${id}`);
+                    if(toggleBtn) {
+                        toggleBtn.checked = isOn;
+                        document.getElementById(`card-${id}`).style.borderColor = isOn ? '#10b981' : 'transparent';
+                        document.getElementById(`icon-${id}`).className = `fa-solid ${dev.icon} text-3xl ` + (isOn ? 'text-green-400' : 'text-slate-500');
+                        toggleBtn.style.transform = isOn ? 'translateX(100%)' : 'translateX(0)';
+                        toggleBtn.style.borderColor = isOn ? '#10b981' : '#cbd5e1';
+                        toggleBtn.nextElementSibling.style.backgroundColor = isOn ? '#10b981' : '#475569';
+                        
+                        document.getElementById(`title-${id}`).innerText = currentName;
+                        document.getElementById(`display-watt-${id}`).innerText = currentWatt + "W";
+                    }
+
+                    // Update Inputs
+                    document.getElementById(`profile-title-${id}`).innerText = currentName;
+                    document.getElementById(`sched-title-${id}`).innerText = currentName;
+                    
+                    if(document.activeElement !== document.getElementById(`rename-input-${id}`)) document.getElementById(`rename-input-${id}`).value = currentName;
+                    if(document.activeElement !== document.getElementById(`watt-input-${id}`)) document.getElementById(`watt-input-${id}`).value = currentWatt;
+                    
+                    document.getElementById(`sched-time-${id}`).value = sched.time || "";
+                    document.getElementById(`sched-action-${id}`).value = sched.action !== undefined ? sched.action : "1";
+                    document.getElementById(`sched-active-${id}`).checked = sched.active || false;
+                });
+
+                // Update Quick Stats
+                document.getElementById('quick-total-watts').innerText = totalWatts + " W";
+                document.getElementById('quick-active-watts').innerText = activeWatts + " W";
+                document.getElementById('quick-total-uptime').innerText = (totalSeconds / 3600).toFixed(2) + " hrs";
+
+                // Refresh Charts Live
+                if(document.getElementById('tab-dashboard').classList.contains('hidden') === false) renderCharts();
+            });
+        }
+
+        // --- 6. DATABASE WRITE ACTIONS ---
+        function toggle(id, state) { 
+            db.ref('Users/' + currentUser.uid + '/devices/' + id).set(state ? 1 : 0); 
+        }
+        
+        // UNIFIED SAVE SETTINGS FUNCTION
+        function saveAllSettings() {
+            const uid = currentUser.uid;
+            let updates = {};
+            
+            const btn = document.getElementById('global-save-btn');
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving...';
+
+            devices.forEach(dev => {
+                const id = dev.id;
+                
+                // Grab Profiles
+                updates[`Users/${uid}/names/${id}`] = document.getElementById(`rename-input-${id}`).value;
+                updates[`Users/${uid}/watts/${id}`] = Number(document.getElementById(`watt-input-${id}`).value);
+                
+                // Grab Schedules & format perfectly for ESP32
+                const schedActive = document.getElementById(`sched-active-${id}`).checked;
+                const schedTime = document.getElementById(`sched-time-${id}`).value;
+                
+                if(schedActive && schedTime) {
+                    const [hour, minute] = schedTime.split(':').map(Number);
+                    updates[`Users/${uid}/schedules/${id}`] = {
+                        hour: hour,
+                        minute: minute,
+                        action: Number(document.getElementById(`sched-action-${id}`).value),
+                        active: true,
+                        time: schedTime // Saved for UI visual sync
+                    };
+                } else {
+                    updates[`Users/${uid}/schedules/${id}`] = { active: false }; 
+                }
+            });
+
+            db.ref().update(updates).then(() => {
+                setTimeout(() => {
+                    btn.className = "bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-lg";
+                    btn.innerHTML = '<i class="fa-solid fa-check mr-2"></i> Saved!';
+                    setTimeout(() => { 
+                        btn.className = "bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-lg";
+                        btn.innerHTML = originalHTML; 
+                    }, 2000);
+                }, 500);
+            }).catch(err => {
+                console.error(err);
+                btn.className = "bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-lg";
+                btn.innerHTML = '<i class="fa-solid fa-xmark mr-2"></i> Error';
+                setTimeout(() => { 
+                    btn.className = "bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-lg";
+                    btn.innerHTML = originalHTML; 
+                }, 2000);
+            });
+        }
+
+        // --- 7. DASHBOARD CHART GENERATION ---
+        function renderCharts() {
+            const labels = [];
+            const wattData = [];
+            const uptimeData = [];
+            const bgColors = ['rgba(16, 185, 129, 0.7)', 'rgba(59, 130, 246, 0.7)', 'rgba(168, 85, 247, 0.7)', 'rgba(245, 158, 11, 0.7)'];
+
+            devices.forEach(dev => {
+                labels.push(globalData.names[dev.id] || dev.name);
+                wattData.push(Number(globalData.watts[dev.id]) || 0);
+                uptimeData.push(Number((globalData.uptime[dev.id] || 0) / 3600).toFixed(2));
+            });
+
+            if(powerChartInstance) powerChartInstance.destroy();
+            if(uptimeChartInstance) uptimeChartInstance.destroy();
+
+            const commonOptions = {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94a3b8' }, beginAtZero: true },
+                    x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                }
+            };
+
+            const ctxPower = document.getElementById('powerChart').getContext('2d');
+            powerChartInstance = new Chart(ctxPower, {
+                type: 'bar',
+                data: { labels: labels, datasets: [{ label: 'Power Rating (W)', data: wattData, backgroundColor: bgColors, borderRadius: 6 }] },
+                options: commonOptions
+            });
+
+            const ctxUptime = document.getElementById('uptimeChart').getContext('2d');
+            uptimeChartInstance = new Chart(ctxUptime, {
+                type: 'line',
+                data: { labels: labels, datasets: [{ label: 'Uptime (Hours)', data: uptimeData, borderColor: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.2)', borderWidth: 3, fill: true, tension: 0.4 }] },
+                options: commonOptions
+            });
+        }
+    </script>
+</body>
+</html>
